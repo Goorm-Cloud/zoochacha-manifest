@@ -21,7 +21,7 @@ service:
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
 
-namespace: zoochahca
+namespace: zoochacha
 
 nginx:
   config:
