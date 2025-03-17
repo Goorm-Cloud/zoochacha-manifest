@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: {{ .Release.Namespace }}
+data:
+  nginx.conf: |
+    worker_processes auto;
+    events {
+        worker_connections 1024;
+    }
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        upstream flask_admin_service {
+            server {{ .Values.nginxConfig.upstreams.flask_admin_service }};
+        }
+
+        upstream map_service {
+            server {{ .Values.nginxConfig.upstreams.map_service }};
+        }
+
+        upstream zoochacha_service {
+            server {{ .Values.nginxConfig.upstreams.zoochacha_service }};
+        }
+
+        upstream reservation_detail_service {
+            server {{ .Values.nginxConfig.upstreams.reservation_detail_service }};
+        }
+
+        server {
+            listen 80;
+
+            location / {
+                proxy_pass http://map_service;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+
+            location /parking-lot {
+                proxy_pass http://zoochacha_service;
+            }
+
+            location /reservation-detail {
+                proxy_pass http://reservation_detail_service;
+            }
+
+            location /admin {
+                proxy_pass http://flask_admin_service;
+            }
+
+            location /static/ {
+                proxy_pass http://map_service;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+        }
+    }

@@ -1,0 +1,33 @@
+replicaCount: 2
+
+autoscaling:
+  enabled: false  # HPA가 필요하면 true, 필요 없으면 false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+ingress:
+  enabled: false
+
+image:
+  repository: nginx
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  name: nginx-proxy
+  port: 80
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+
+nginxConfig:
+  upstreams:
+    flask_admin_service: "admin-server.zinucha.svc.cluster.local:8001"
+    map_service: "map-server.zinucha.svc.cluster.local:8002"
+    zoochacha_service: "zoochacha-server.zinucha.svc.cluster.local:8003"
+    reservation_detail_service: "rds-server.zinucha.svc.cluster.local:8004"
+
+serviceAccount:
+  create: true
+  name: nginx-proxy-sa
