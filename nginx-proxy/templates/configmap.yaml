@@ -14,19 +14,19 @@ data:
         default_type application/octet-stream;
 
         upstream flask_admin_service {
-            server {{ tpl .Values.nginx.config.upstreams.flask_admin_service . }};
+            server "{{ .Values.nginx.config.upstreams.flask_admin_service }}";
         }
 
         upstream map_service {
-            server {{ tpl .Values.nginx.config.upstreams.map_service . }};
+            server "{{ .Values.nginx.config.upstreams.map_service }}";
         }
 
         upstream zoochacha_service {
-            server {{ tpl .Values.nginx.config.upstreams.zoochacha_service . }};
+            server "{{ .Values.nginx.config.upstreams.zoochacha_service }}";
         }
 
         upstream reservation_detail_service {
-            server {{ tpl .Values.nginx.config.upstreams.reservation_detail_service . }};
+            server "{{ .Values.nginx.config.upstreams.reservation_detail_service }}";
         }
 
         server {
