@@ -21,8 +21,8 @@ data:
             server "{{ tpl "map-server.{{ .Values.namespace }}.svc.cluster.local:8002" . }}";
         }
 
-        upstream zoochacha_service {
-            server "{{ tpl "zoochacha-server.{{ .Values.namespace }}.svc.cluster.local:8003" . }}";
+        upstream reservation_service {
+            server "{{ tpl "reservation-server.{{ .Values.namespace }}.svc.cluster.local:8003" . }}";
         }
 
         upstream reservation_detail_service {
@@ -46,7 +46,7 @@ data:
 
             # 주차장 관련 API (예약 페이지)
             location /parking-lot {
-                proxy_pass http://zoochacha_service;
+                proxy_pass http://reservation_service;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -56,11 +56,11 @@ data:
             }
 
             location ~ ^/parking-lot/(\d+)$ {
-                proxy_pass http://zoochacha_service;
+                proxy_pass http://reservation_service;
             }
 
             location ~ ^/reservation/(\d+)/reserve$ {
-                proxy_pass http://zoochacha_service;
+                proxy_pass http://reservation_service;
             }
 
 
@@ -137,7 +137,7 @@ data:
             }
 
             location /reservation/static/ {
-                proxy_pass http://zoochacha_service;
+                proxy_pass http://reservation_service;
                 proxy_redirect off;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;

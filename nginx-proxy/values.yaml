@@ -28,7 +28,7 @@ nginx:
     upstreams:
       flask_admin_service: "admin-server.{{ .Values.namespace }}.svc.cluster.local:8001"
       map_service: "map-server.{{ .Values.namespace }}.svc.cluster.local:8002"
-      zoochacha_service: "zoochacha-server.{{ .Values.namespace }}.svc.cluster.local:8003"
+      reservation_service: "reservation-server.{{ .Values.namespace }}.svc.cluster.local:8003"
       reservation_detail_service: "rds-server.{{ .Values.namespace }}.svc.cluster.local:8004"
 
 serviceAccount:
