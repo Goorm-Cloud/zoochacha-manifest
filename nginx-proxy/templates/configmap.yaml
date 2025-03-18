@@ -14,19 +14,19 @@ data:
         default_type application/octet-stream;
 
         upstream flask_admin_service {
-            server "{{ tpl "admin-server.{{ .Values.namespace }}.svc.cluster.local:8001;" . }}";
+            server "{{ tpl "admin-server.{{ .Values.namespace }}.svc.cluster.local:8001" . }}";
         }
 
         upstream map_service {
-            server "{{ tpl "map-server.{{ .Values.namespace }}.svc.cluster.local:8002;" . }}";
+            server "{{ tpl "map-server.{{ .Values.namespace }}.svc.cluster.local:8002" . }}";
         }
 
         upstream zoochacha_service {
-            server "{{ tpl "zoochacha-server.{{ .Values.namespace }}.svc.cluster.local:8003;" . }}";
+            server "{{ tpl "zoochacha-server.{{ .Values.namespace }}.svc.cluster.local:8003" . }}";
         }
 
         upstream reservation_detail_service {
-            server "{{ tpl "rds-server.{{ .Values.namespace }}.svc.cluster.local:8004;" . }}";
+            server "{{ tpl "rds-server.{{ .Values.namespace }}.svc.cluster.local:8004" . }}";
         }
 
         server {
