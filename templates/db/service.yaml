@@ -1,0 +1,34 @@
+{{- if .Values.database.enabled }}
+# Headless service for stable DNS entries of StatefulSet members.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: {{ .Values.global.namespaces.db }}
+  labels:
+    app: mysql
+    app.kubernetes.io/name: mysql
+spec:
+  ports:
+  - name: mysql
+    port: {{ .Values.database.service.port }}
+  clusterIP: None
+  selector:
+    app: mysql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-read
+  namespace: {{ .Values.global.namespaces.db }}
+  labels:
+    app: mysql
+    app.kubernetes.io/name: mysql
+    readonly: "true"
+spec:
+  ports:
+  - name: mysql
+    port: {{ .Values.database.service.port }}
+  selector:
+    app: mysql
+{{- end }} 

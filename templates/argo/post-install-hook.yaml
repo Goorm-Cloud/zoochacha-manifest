@@ -1,0 +1,78 @@
+{{- if and .Values.argocd.enabled (or (not (hasKey .Values.hooks "enabled")) .Values.hooks.enabled) (or (not (hasKey .Values.hooks.postInstall "enabled")) .Values.hooks.postInstall.enabled) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: argocd-post-install
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": hook-succeeded
+  namespace: {{ .Values.global.namespaces.argocd }}
+spec:
+  template:
+    spec:
+      serviceAccountName: {{ if .Values.rbac.serviceAccountName }}{{ .Values.rbac.serviceAccountName }}{{ else }}zoochacha-installer{{ end }}
+      containers:
+      - name: wait-for-argocd
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # ArgoCD가 준비될 때까지 대기
+          echo "ArgoCD 서버가 준비되기를 기다리는 중..."
+          
+          # 설치된 ArgoCD 서버 컴포넌트 확인
+          echo "ArgoCD 서버 컴포넌트 확인 중..."
+          
+          # 여러 아르고 CD 배포명 확인
+          if kubectl get deployment -n {{ .Values.global.namespaces.argocd }} argocd-server 2>/dev/null; then
+            DEPLOYMENT_NAME="argocd-server"
+            echo "$DEPLOYMENT_NAME 배포 발견됨"
+          elif kubectl get deployment -n {{ .Values.global.namespaces.argocd }} argo-cd-argocd-server 2>/dev/null; then
+            DEPLOYMENT_NAME="argo-cd-argocd-server"
+            echo "$DEPLOYMENT_NAME 배포 발견됨"
+          else
+            echo "ArgoCD 서버 배포를 찾을 수 없습니다. 다른 이름 확인 중..."
+            # grep을 사용하여 argocd 또는 argo-cd 패턴을 가진 배포 검색
+            DEPLOYMENT_NAME=$(kubectl get deployments -n {{ .Values.global.namespaces.argocd }} -o name | grep -E 'deployment.apps/(argocd|argo-cd)' | grep -E 'server' | head -n 1 | sed 's/deployment.apps\///')
+            
+            if [ -z "$DEPLOYMENT_NAME" ]; then
+              echo "ArgoCD 서버 배포를 찾을 수 없습니다. 설치 상태를 확인하세요."
+              exit 1
+            else
+              echo "대체 배포 발견: $DEPLOYMENT_NAME"
+            fi
+          fi
+          
+          # 배포가 준비될 때까지 대기
+          echo "$DEPLOYMENT_NAME 배포가 준비되기를 기다리는 중..."
+          kubectl wait --for=condition=available --timeout=300s deployment/$DEPLOYMENT_NAME -n {{ .Values.global.namespaces.argocd }}
+          
+          if [ $? -ne 0 ]; then
+            echo "ArgoCD 서버가 준비되지 않았습니다. 설치 상태를 확인하세요."
+            exit 1
+          fi
+          
+          # CRD가 설치되었는지 확인
+          echo "ArgoCD CRD 확인 중..."
+          until kubectl get crd applications.argoproj.io &>/dev/null; do
+            echo "ArgoCD CRD를 기다리는 중..."
+            sleep 5
+          done
+          
+          # 초기 관리자 비밀번호 검색
+          echo "ArgoCD 초기 관리자 비밀번호 검색 중..."
+          ARGO_PASSWORD=$(kubectl -n {{ .Values.global.namespaces.argocd }} get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d)
+          
+          if [ -n "$ARGO_PASSWORD" ]; then
+            echo "ArgoCD 초기 관리자 비밀번호가 준비되었습니다."
+          else
+            echo "ArgoCD 초기 관리자 비밀번호를 찾을 수 없습니다. 다른 시크릿 이름을 확인하세요."
+          fi
+          
+          echo "ArgoCD가 준비되었습니다. 이제 Application CR을 설치할 수 있습니다."
+          exit 0
+      restartPolicy: Never
+  backoffLimit: 5
+{{- end }} 

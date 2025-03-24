@@ -1,0 +1,11 @@
+{{- if .Values.database.enabled }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.database.storageClass.name }}
+provisioner: {{ .Values.database.storageClass.provisioner }}
+parameters:
+  type: {{ .Values.database.storageClass.type }}
+reclaimPolicy: {{ .Values.database.storageClass.reclaimPolicy }}
+allowVolumeExpansion: {{ .Values.database.storageClass.allowVolumeExpansion }}
+{{- end }} 

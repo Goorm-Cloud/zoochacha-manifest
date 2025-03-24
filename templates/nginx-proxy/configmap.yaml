@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: {{ .Values.global.namespaces.nginx }}
+data:
+  nginx.conf: |
+    worker_processes auto;
+    events {
+        worker_connections 1024;
+    }
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        # SSL 설정
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers off;
+        ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+        ssl_session_timeout 1d;
+        ssl_session_cache shared:SSL:50m;
+        ssl_session_tickets off;
+        ssl_certificate /etc/nginx/ssl/tls.crt;
+        ssl_certificate_key /etc/nginx/ssl/tls.key;
+
+        {{- range .Values.services }}
+        upstream {{ .name }}_service {
+            server {{ .serviceName }}.{{ $.Values.global.namespaces.nginx }}.svc.cluster.local:{{ .port }};
+        }
+        {{- end }}
+
+        # HTTP -> HTTPS 리디렉트
+        server {
+            listen 80 proxy_protocol;
+            server_name {{ .Values.global.domain }} www.{{ .Values.global.domain }};
+            return 301 https://$host$request_uri;
+        }
+
+        # HTTPS 서버
+        server {
+            listen 443 ssl;
+            server_name {{ .Values.global.domain }};
+
+            ssl_certificate /etc/nginx/ssl/tls.crt;
+            ssl_certificate_key /etc/nginx/ssl/tls.key;
+
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_ciphers HIGH:!aNULL:!MD5;
+
+            # 프록시 프로토콜 설정
+            set_real_ip_from 0.0.0.0/0;
+            real_ip_header proxy_protocol;
+
+            # 메인 페이지 (지도 서비스)
+            location = / {
+                return 301 /map/;
+            }
+
+            {{- range .Values.locations }}
+            location {{ .path }} {
+                proxy_pass http://{{ .service }}_service;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                {{- if .buffering }}
+                proxy_buffering off;
+                {{- end }}
+                {{- if .caching }}
+                expires {{ .caching.expires }};
+                add_header Cache-Control "{{ .caching.cacheControl }}";
+                {{- if .caching.pragma }}
+                add_header Pragma "{{ .caching.pragma }}";
+                {{- end }}
+                {{- if .caching.expireTime }}
+                add_header Expires {{ .caching.expireTime }};
+                {{- end }}
+                {{- end }}
+            }
+            {{- end }}
+
+            add_header Strict-Transport-Security "max-age=31536000" always;
+            add_header X-Frame-Options DENY;
+            add_header X-Content-Type-Options nosniff;
+            add_header X-XSS-Protection "1; mode=block";
+        }
+    }
+  {{- if .Values.nginxProxy.configMap.extraConfig }}
+  {{- range $key, $value := .Values.nginxProxy.configMap.extraConfig }}
+  {{ $key }}: |
+{{ $value | indent 4 }}
+  {{- end }}
+  {{- end }} 

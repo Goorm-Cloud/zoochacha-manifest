@@ -1,0 +1,52 @@
+{{- if and (hasKey .Values "namespaces") }}
+# 네임스페이스 생성 템플릿
+# 이 템플릿은 설정에 지정된 모든 네임스페이스를 자동으로 생성합니다
+# 각 네임스페이스는 create 플래그가 true인 경우에만 생성됩니다
+{{- range .Values.namespaces }}
+{{- if .create }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .name }}
+  labels:
+    # 네임스페이스에 관리 레이블 추가
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version }}
+    # 필요한 경우 아래에 추가 레이블을 정의하세요
+    {{- if $.Values.global }}
+    {{- if $.Values.global.environment }}
+    environment: {{ $.Values.global.environment }}
+    {{- end }}
+    {{- end }}
+    {{- if .labels }}
+    {{- toYaml .labels | nindent 4 }}
+    {{- end }}
+    name: {{ .name }}
+    {{- if eq .name "zoochacha" }}
+    priority: "high"
+    {{- end }}
+  annotations:
+    # 네임스페이스 주석
+    zoochacha.io/description: "Zoochacha 인프라 네임스페이스: {{ .name }}"
+    zoochacha.io/created-by: "Helm 차트"
+    {{- if $.Values.global.annotations }}
+    {{- range $key, $val := $.Values.global.annotations }}
+    {{ $key }}: {{ $val }}
+    {{- end }}
+    {{- end }}
+    "helm.sh/hook": "pre-install"
+    {{- if eq .name "zoochacha" }}
+    "helm.sh/hook-weight": "-20"
+    {{- else if eq .name "cert-manager" }}
+    "helm.sh/hook-weight": "-19"
+    {{- else if eq .name "zoochacha-db" }}
+    "helm.sh/hook-weight": "-18"
+    {{- else }}
+    "helm.sh/hook-weight": "-17"
+    {{- end }}
+    "helm.sh/hook-delete-policy": "before-hook-creation"
+{{- end }}
+{{- end }}
+{{- end }} 

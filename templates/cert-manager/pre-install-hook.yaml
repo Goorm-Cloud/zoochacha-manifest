@@ -1,0 +1,30 @@
+{{- if and .Values.certManager.enabled (or (not (hasKey .Values.hooks "enabled")) .Values.hooks.enabled) (or (not (hasKey .Values.hooks.preInstall "enabled")) .Values.hooks.preInstall.enabled) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cert-manager-pre-install
+  namespace: {{ .Values.global.namespaces.cert_manager }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: cert-manager-wait
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for cert-manager CRDs to be established"
+          until kubectl get crd issuers.cert-manager.io clusterissuers.cert-manager.io certificates.cert-manager.io > /dev/null 2>&1; do
+            echo "Waiting for cert-manager CRDs..."
+            sleep 5
+          done
+          echo "Cert-Manager CRDs are ready"
+      restartPolicy: Never
+  backoffLimit: 3
+{{- end }} 

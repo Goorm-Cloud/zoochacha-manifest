@@ -1,0 +1,55 @@
+# Helm
+*.tgz
+charts/
+
+# Secrets
+secrets.yaml
+*secret*.yaml
+*credential*.yaml
+*password*.yaml
+*private*.yaml
+
+# 의존성 디렉토리
+.helm/
+
+# 파생 파일
+Chart.lock
+
+# OS 관련 파일
+.DS_Store
+Thumbs.db
+
+# 개발 환경 파일
+.vscode/
+.idea/
+*.swp
+*~
+
+# 임시 파일
+temp/
+tmp/
+.cache/
+
+# 민감 정보 파일
+.secrets.yaml
+secrets.yaml
+.secrets.*.yaml
+.values.*.yaml
+values.*.yaml
+*-secrets.yaml
+*-credentials.yaml
+
+# 개발 환경 관련 파일
+.idea/
+.vscode/
+*.swp
+*~
+*.bak
+.DS_Store
+
+# 빌드 결과물
+*.tgz
+dist/
+tmp/
+
+# 기존 gitignore 내용 유지 

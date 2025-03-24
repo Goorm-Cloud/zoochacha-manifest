@@ -1,0 +1,25 @@
+{{- if and (hasKey .Values "certManager") .Values.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@{{ .Values.global.domain }}
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - selector:
+        dnsZones:
+          - {{ .Values.global.domain }}
+      dns01:
+        route53:
+          region: {{ .Values.aws.region }}
+          accessKeyID: {{ if and (hasKey .Values "secrets") (hasKey .Values.secrets "aws") (hasKey .Values.secrets.aws "accessKeyID") }}{{ .Values.secrets.aws.accessKeyID }}{{ else }}""{{ end }}
+          secretAccessKeySecretRef:
+            name: route53-credentials
+            key: access-key
+{{- end }} 

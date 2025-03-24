@@ -1,0 +1,48 @@
+축하합니다! Zoochacha 인프라가 성공적으로 배포되었습니다.
+
+애플리케이션에 접근하는 방법:
+
+1. Nginx 서비스 외부 IP 가져오기:
+{{- if contains "LoadBalancer" .Values.nginx.service.type }}
+   kubectl --namespace {{ .Release.Namespace }} get services -o wide -w {{ .Release.Name }}-nginx
+   
+   서비스가 EXTERNAL-IP를 할당받을 때까지 기다리세요. 외부 IP가 확인되면, 브라우저에서 http://$EXTERNAL_IP 를 방문하여 애플리케이션에 접근할 수 있습니다.
+{{- else if contains "ClusterIP" .Values.nginx.service.type }}
+   export POD_NAME=$(kubectl --namespace {{ .Release.Namespace }} get pods -l "app.kubernetes.io/name=nginx,app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+   kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:8080
+   
+   이제 애플리케이션에 http://127.0.0.1:8080/ 을 통해 접근할 수 있습니다.
+{{- end }}
+
+2. 각 구성 요소 상태 확인:
+
+   Nginx:
+   kubectl get pods -n {{ .Values.global.namespaces.nginx }}
+
+   Cert-Manager:
+   kubectl get pods -n cert-manager
+
+   MySQL DB:
+   kubectl get pods -n {{ .Values.global.namespaces.db }}
+
+   ArgoCD:
+   kubectl get pods -n argocd
+   
+   ArgoCD 애플리케이션:
+   kubectl get applications -n argocd
+
+3. 도메인 설정:
+   적절한 DNS 레코드를 설정하여 도메인이 Nginx 서버의 외부 IP를 가리키도록 하세요.
+   예: *.zoochacha.com -> EXTERNAL_IP
+
+Zoochacha 인프라 구성 요소:
+- Cert-Manager: TLS 인증서 자동 발급 및 관리
+- Nginx: 웹 서버 및 로드 밸런서
+- MySQL DB: 애플리케이션 데이터 저장소
+- ArgoCD: GitOps를 통한 애플리케이션 배포 자동화
+
+인프라 설치 후, 다음 서비스가 자동으로 배포됩니다:
+- 관리자 서비스
+- 지도 서비스
+- 예약 서비스
+- RDS 서비스 

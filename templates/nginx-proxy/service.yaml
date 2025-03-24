@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-loadbalancer
+  namespace: {{ .Values.global.namespaces.nginx }}
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "{{ .Values.nginx.service.loadBalancerType }}"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "{{ .Values.nginx.service.targetType }}"
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "{{ .Values.nginx.service.idleTimeout }}"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "{{ .Values.nginx.service.crossZoneEnabled }}"
+  labels:
+    app: nginx-proxy
+spec:
+  type: {{ .Values.nginx.service.type }}
+  selector:
+    app: nginx-proxy
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: http
+    - protocol: TCP
+      port: 443
+      targetPort: 443
+      name: https 

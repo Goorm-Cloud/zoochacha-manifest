@@ -1,0 +1,49 @@
+apiVersion: v2
+name: zoochacha-manifest
+description: Zoochacha 인프라를 위한 Helm 차트 (Nginx Proxy, Cert-Manager, DB, ArgoCD)
+
+# Chart 유형 (application 또는 library)
+type: application
+
+# Chart 버전
+version: 0.1.0
+
+# 애플리케이션 버전
+appVersion: "1.0.0"
+
+# 키워드
+keywords:
+  - zoochacha
+  - nginx
+  - cert-manager
+  - mysql
+  - argocd
+
+# 홈페이지
+home: https://github.com/Goorm-Cloud/Zoochacha_k8s
+
+# 유지보수자 정보
+maintainers:
+  - name: Zoochacha Team
+    email: jjang3a@gmail.com
+
+# 소스 코드 위치
+sources:
+  - https://github.com/Goorm-Cloud/Zoochacha_k8s
+
+# 차트 의존성
+dependencies:
+  - name: cert-manager
+    version: v1.13.3
+    repository: https://charts.jetstack.io
+    condition: cert-manager.enabled
+  
+  - name: nginx
+    version: 15.1.4
+    repository: https://charts.bitnami.com/bitnami
+    condition: nginx.enabled
+  
+  - name: argo-cd
+    version: 5.52.0
+    repository: https://argoproj.github.io/argo-helm
+    condition: argocd.enabled

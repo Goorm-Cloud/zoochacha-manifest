@@ -1,0 +1,62 @@
+{{- if and .Values.database.enabled (or (not (hasKey .Values.hooks "enabled")) .Values.hooks.enabled) (or (not (hasKey .Values.hooks.preInstall "enabled")) .Values.hooks.preInstall.enabled) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-pre-install
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+  namespace: {{ .Values.global.namespaces.db }}
+spec:
+  template:
+    spec:
+      serviceAccountName: {{ if .Values.rbac.serviceAccountName }}{{ .Values.rbac.serviceAccountName }}{{ else }}zoochacha-installer{{ end }}
+      containers:
+      - name: wait-for-db
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # 데이터베이스 네임스페이스에 대기
+          echo "데이터베이스 네임스페이스를 기다리는 중..."
+          kubectl get namespace {{ .Values.global.namespaces.db }} || exit 1
+          
+          # MySQL 설치 확인
+          if kubectl get statefulsets -n {{ .Values.global.namespaces.db }} mysql 2>/dev/null; then
+            echo "MySQL StatefulSet이 이미 존재합니다. 준비 상태를 확인합니다."
+            
+            # Pod가 실행 중인지 확인
+            while true; do
+              RUNNING_PODS=$(kubectl get pods -n {{ .Values.global.namespaces.db }} -l app=mysql -o jsonpath='{.items[*].status.phase}' | tr ' ' '\n' | grep -c "Running" || echo "0")
+              TOTAL_PODS=$(kubectl get pods -n {{ .Values.global.namespaces.db }} -l app=mysql -o jsonpath='{.items[*].status.phase}' | tr ' ' '\n' | wc -l || echo "0")
+              
+              echo "Running pods: $RUNNING_PODS/$TOTAL_PODS"
+              
+              if [ "$RUNNING_PODS" -eq "$TOTAL_PODS" ] && [ "$TOTAL_PODS" -gt 0 ]; then
+                echo "모든 MySQL Pod가 실행 중입니다."
+                break
+              fi
+              
+              echo "모든 MySQL Pod가 실행될 때까지 대기 중..."
+              sleep 5
+            done
+            
+            # MySQL 서비스가 준비되었는지 확인
+            echo "MySQL 서비스가 준비되었는지 확인합니다..."
+            kubectl get service -n {{ .Values.global.namespaces.db }} mysql || {
+              echo "MySQL 서비스를 찾을 수 없습니다."
+              exit 1
+            }
+            
+            echo "MySQL이 준비되었습니다."
+          else
+            echo "MySQL StatefulSet이 아직 존재하지 않습니다. 이후 설치될 예정입니다."
+          fi
+          
+          echo "데이터베이스 사전 검사가 완료되었습니다."
+          exit 0
+      restartPolicy: Never
+  backoffLimit: 5
+{{- end }} 

@@ -1,0 +1,409 @@
+# Default values for zoochacha-manifest.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+replicaCount: 1
+
+# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+image:
+  repository: nginx
+  # This sets the pull policy for images.
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "zoochacha-nginx"
+
+# This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets: []
+# This is to override the chart name.
+nameOverride: "zoochacha"
+fullnameOverride: "zoochacha"
+
+# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# This is for setting Kubernetes Annotations to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+podAnnotations: {}
+# This is for setting Kubernetes Labels to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+service:
+  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+  type: ClusterIP
+  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+  port: 80
+
+# This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
+ingress:
+  enabled: false
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+livenessProbe:
+  httpGet:
+    path: /
+    port: http
+readinessProbe:
+  httpGet:
+    path: /
+    port: http
+
+# This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# Additional volumes on the output Deployment definition.
+volumes: []
+# - name: foo
+#   secret:
+#     secretName: mysecret
+#     optional: false
+
+# Additional volumeMounts on the output Deployment definition.
+volumeMounts: []
+# - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Global Values
+global:
+  environment: production
+  domain: zoochacha.com
+  adminDomain: www.zoochacha.com/admin
+  # Namespace 설정
+  namespaces:
+    cert_manager: cert-manager
+    argocd: argocd
+    nginx: zoochacha
+    db: zoochacha-db
+  # 인스톨러 관련 설정
+  installer:
+    namespace: zoochacha
+    serviceAccountName: zoochacha-installer
+
+# AWS 설정
+aws:
+  region: ap-northeast-2
+  # 민감정보는 secrets.yaml에서 가져옴
+  # accessKeyID, secretAccessKey, roleArn
+
+# Cert-Manager Configuration
+cert-manager:
+  enabled: true
+  installCRDs: true
+  
+  # DNS 챌린지를 위한 솔버 설정
+  solver:
+    dns01:
+      route53:
+        region: us-east-1
+
+# Nginx Ingress Configuration
+nginx-ingress:
+  enabled: false
+
+# Nginx Configuration
+nginx:
+  enabled: true
+  service:
+    type: LoadBalancer
+  serverBlock: |-
+    server {
+      listen 0.0.0.0:8080;
+      
+      location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 요청을 해당 서비스로 전달
+        proxy_pass http://map-server.zoochacha.svc.cluster.local:8002;
+      }
+      
+      location /admin {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 요청을 관리자 서비스로 전달
+        proxy_pass http://admin-server.zoochacha.svc.cluster.local:8001;
+      }
+      
+      # 다른 서비스 경로 설정
+      {{- range .Values.locations }}
+      location {{ .path }} {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        
+        {{- if eq .service "map" }}
+        proxy_pass http://map-server.zoochacha.svc.cluster.local:8002;
+        {{- else if eq .service "flask_admin" }}
+        proxy_pass http://admin-server.zoochacha.svc.cluster.local:8001;
+        {{- else if eq .service "reservation" }}
+        proxy_pass http://reservation-server.zoochacha.svc.cluster.local:8003;
+        {{- else if eq .service "reservation_detail" }}
+        proxy_pass http://rds-server.zoochacha.svc.cluster.local:8004;
+        {{- end }}
+        
+        {{- if .buffering }}
+        proxy_buffering on;
+        {{- else }}
+        proxy_buffering off;
+        {{- end }}
+        
+        {{- if .caching }}
+        expires {{ .caching.expires }};
+        add_header Cache-Control "{{ .caching.cacheControl }}";
+        {{- if .caching.pragma }}
+        add_header Pragma "{{ .caching.pragma }}";
+        {{- end }}
+        {{- end }}
+      }
+      {{- end }}
+      
+      # 헬스 체크 엔드포인트
+      location /healthz {
+        return 200 "healthy\n";
+      }
+    }
+
+# Services Configuration
+services:
+  - name: flask_admin
+    serviceName: admin-server
+    port: 8001
+  - name: map
+    serviceName: map-server
+    port: 8002
+  - name: reservation
+    serviceName: reservation-server
+    port: 8003
+  - name: reservation_detail
+    serviceName: rds-server
+    port: 8004
+
+# Location Configuration
+locations:
+  - path: /
+    service: map
+    buffering: true
+  - path: /parking-lot
+    service: reservation
+  - path: ~ ^/parking-lot/(\d+)$
+    service: reservation
+  - path: ~ ^/reservation/(\d+)/reserve$
+    service: reservation
+  - path: ~ ^/reservation-detail/(\d+)$
+    service: reservation_detail
+  - path: ~ ^/reservation-detail/api/detail/(\d+)$
+    service: reservation_detail
+  - path: ~ ^/reservation-detail/reactivate/(\d+)$
+    service: reservation_detail
+  - path: /reservation-detail/not-found
+    service: reservation_detail
+  - path: /admin
+    service: flask_admin
+  - path: /login
+    service: flask_admin
+  - path: /role_check
+    service: flask_admin
+  - path: /authorize
+    service: flask_admin
+  - path: /callback
+    service: flask_admin
+  - path: /logout
+    service: flask_admin
+  - path: ~ ^/admin/reservation/(\d+)$
+    service: flask_admin
+  - path: ~ ^/admin/parkinglot/edit/(\d+)$
+    service: flask_admin
+  - path: /admin/parkinglot
+    service: flask_admin
+  - path: /static/
+    service: map
+    buffering: true
+    caching:
+      expires: -1
+      cacheControl: "no-cache, no-store, must-revalidate"
+      pragma: "no-cache"
+      expireTime: 0
+  - path: /reservation/static/
+    service: reservation
+    caching:
+      expires: 7d
+      cacheControl: "public, max-age=604800"
+
+# Database Configuration
+database:
+  enabled: true
+  type: mysql
+  host: "mysql-0.mysql.zoochacha-db.svc.cluster.local"
+  port: 3306
+  database: zoochacha
+  replicas: 3
+  image:
+    repository: mysql
+    tag: "5.7"
+  xtrabackup:
+    repository: gcr.io/google-samples/xtrabackup
+    tag: "1.0"
+  service:
+    port: 3306
+  storageClass:
+    name: mysql-retain-sc
+    provisioner: kubernetes.io/aws-ebs
+    type: gp2
+    reclaimPolicy: Retain
+    allowVolumeExpansion: true
+  storage:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  # Sensitive values in secrets.yaml:
+  # username, password, rootPassword
+
+# ArgoCD Configuration
+argocd:
+  enabled: true
+  # 기존 리포지토리 시크릿이 있으면 새로 생성하지 않음
+  skipRepositorySecrets: true
+  server:
+    extraArgs:
+      - --insecure
+  # Argo CD 웹 인터페이스 접근을 위한 Ingress 설정
+  ingress:
+    enabled: false
+  
+  # ArgoCD 애플리케이션 관리
+  application:
+    enabled: true
+    # 자동 동기화 설정
+    syncPolicy:
+      automated:
+        prune: true
+        selfHeal: true
+    # 애플리케이션 소스 저장소 설정 - 실제 값은 templates/argo/application.yaml에서 사용
+    source:
+      targetRevision: HEAD
+    # 대상 Kubernetes 클러스터 설정
+    destination:
+      server: https://kubernetes.default.svc
+      namespace: zoochacha
+  
+  # 사용자 정의 리소스 정의(CRD) 설치 여부
+  crds:
+    install: false
+  
+  # Redis 설정
+  redis:
+    enabled: true
+
+# TLS Configuration
+tls:
+  enabled: true
+  clusterIssuer:
+    name: letsencrypt-prod
+    email: admin@zoochacha.com
+
+# ArgoCD Chart 설정 (서브차트)
+argo-cd:
+  global:
+    domain: argocd.zoochacha.com
+  installCRDs: false
+  server:
+    ingress:
+      enabled: false
+  controller:
+    namespace: argocd
+  dex:
+    enabled: false
+  notifications:
+    enabled: true
+  applicationSet:
+    enabled: true
+
+# 네임스페이스 설정
+namespaces:
+  - name: cert-manager
+    create: true
+  - name: ingress-nginx
+    create: false
+  - name: zoochacha
+    create: true
+  - name: zoochacha-db
+    create: true
+  - name: argocd
+    create: false
+
+# 민감정보 - Git에 포함되지 않는 파일
+secrets:
+  aws:
+    accessKeyID: "" # 실제 값은 secrets.yaml 파일에서 제공
+    secretAccessKey: "" # 실제 값은 secrets.yaml 파일에서 제공
+    roleArn: "" # 실제 값은 secrets.yaml 파일에서 제공
+  database:
+    username: "" # 실제 값은 secrets.yaml 파일에서 제공
+    password: "" # 실제 값은 secrets.yaml 파일에서 제공
+    rootPassword: "" # 실제 값은 secrets.yaml 파일에서 제공
+  argocd:
+    githubToken: "" # 실제 값은 secrets.yaml 파일에서 제공
+    repositories:
+      - name: admin-service
+        url: https://github.com/Goorm-Cloud/manifast-admin.git
+      - name: map-service
+        url: https://github.com/Goorm-Cloud/manifast-map.git
+      - name: reservation-service
+        url: https://github.com/Goorm-Cloud/manifast-reservation.git
+      - name: reservation-detail-service
+        url: https://github.com/Goorm-Cloud/manifast-rds.git
