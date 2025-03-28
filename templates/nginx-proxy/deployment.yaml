@@ -7,7 +7,7 @@ metadata:
   labels:
     app: nginx-proxy
 spec:
-  replicas: {{ .Values.replicaCount | default 1 }}
+  replicas: {{ .Values.nginxProxy.replicaCount | default 2 }}
   selector:
     matchLabels:
       app: nginx-proxy
@@ -17,19 +17,22 @@ spec:
         app: nginx-proxy
     spec:
       containers:
-        - name: nginx
-          image: {{ .Values.nginx.image.repository | default "nginx" }}:{{ .Values.nginx.image.tag | default "latest" }}
+        - name: nginx-proxy
+          image: {{ .Values.nginxProxy.image.repository }}:{{ .Values.nginxProxy.image.tag }}
+          imagePullPolicy: {{ .Values.nginxProxy.image.pullPolicy | default "Always" }}
           ports:
             - containerPort: 80
               name: http
             - containerPort: 443
               name: https
           resources:
-            {{- if .Values.nginx.resources }}
-            {{- toYaml .Values.nginx.resources | nindent 12 }}
-            {{- else }}
-            limits: {}
-            requests: {}
+            {{- with .Values.resources.nginx }}
+            requests:
+              cpu: {{ .requests.cpu }}
+              memory: {{ .requests.memory }}
+            limits:
+              cpu: {{ .limits.cpu }}
+              memory: {{ .limits.memory }}
             {{- end }}
           volumeMounts:
             - name: nginx-config

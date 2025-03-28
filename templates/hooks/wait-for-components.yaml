@@ -1,0 +1,36 @@
+{{- if .Values.hooks.postInstall.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wait-for-components
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      serviceAccountName: {{ .Values.rbac.serviceAccountName }}
+      containers:
+      - name: wait-for-components
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # cert-manager 대기
+          echo "Waiting for cert-manager to be ready..."
+          kubectl wait --for=condition=available deployment/cert-manager-webhook -n cert-manager --timeout=300s
+          
+          # ArgoCD 대기
+          echo "Waiting for ArgoCD to be ready..."
+          kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=300s
+          
+          # Karpenter 대기
+          echo "Waiting for Karpenter to be ready..."
+          kubectl wait --for=condition=available deployment/karpenter -n karpenter --timeout=300s
+          
+          echo "All components are ready!"
+      restartPolicy: Never
+  backoffLimit: 5
+{{- end }} 

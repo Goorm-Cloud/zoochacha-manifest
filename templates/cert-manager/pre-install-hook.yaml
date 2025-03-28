@@ -1,4 +1,4 @@
-{{- if and .Values.certManager.enabled (or (not (hasKey .Values.hooks "enabled")) .Values.hooks.enabled) (or (not (hasKey .Values.hooks.preInstall "enabled")) .Values.hooks.preInstall.enabled) }}
+{{- if and .Values.certmanager.enabled (or (not (hasKey .Values.hooks "enabled")) .Values.hooks.enabled) (or (not (hasKey .Values.hooks.preInstall "enabled")) .Values.hooks.preInstall.enabled) }}
 apiVersion: batch/v1
 kind: Job
 metadata:

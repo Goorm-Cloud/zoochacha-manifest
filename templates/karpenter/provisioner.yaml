@@ -1,0 +1,66 @@
+{{- if .Values.karpenter.enabled }}
+apiVersion: karpenter.sh/v1alpha5
+kind: Provisioner
+metadata:
+  name: default
+spec:
+  requirements:
+    - key: karpenter.sh/capacity-type
+      operator: In
+      values: ["spot", "on-demand"]
+    - key: kubernetes.io/arch
+      operator: In
+      values: ["amd64"]
+    - key: kubernetes.io/os
+      operator: In
+      values: ["linux"]
+    - key: karpenter.k8s.aws/instance-category
+      operator: In
+      values: ["t", "c"]
+    - key: karpenter.k8s.aws/instance-generation
+      operator: Gt
+      values: ["2"]
+  limits:
+    resources:
+      cpu: {{ .Values.karpenter.limits.cpu }}
+      memory: {{ .Values.karpenter.limits.memory }}
+  providerRef:
+    name: default
+  consolidation:
+    enabled: true
+  ttlSecondsAfterEmpty: {{ .Values.karpenter.ttlSecondsAfterEmpty }}
+  ttlSecondsUntilExpired: {{ .Values.karpenter.ttlSecondsUntilExpired }}
+---
+apiVersion: karpenter.k8s.aws/v1alpha1
+kind: AWSNodeTemplate
+metadata:
+  name: default
+spec:
+  subnetSelector:
+    kubernetes.io/cluster/{{ .Values.global.clusterName }}: owned
+  securityGroupSelector:
+    kubernetes.io/cluster/{{ .Values.global.clusterName }}: owned
+  tags:
+    KarpenterProvisionerName: default
+    Environment: {{ .Values.global.environment }}
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: {{ .Values.karpenter.volumeSize }}
+        volumeType: gp3
+        encrypted: true
+  instanceProfile: {{ .Values.karpenter.instanceProfile }}
+  userData: |
+    MIME-Version: 1.0
+    Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+    --BOUNDARY
+    Content-Type: text/x-shellscript; charset="us-ascii"
+
+    #!/bin/bash
+    /etc/eks/bootstrap.sh {{ .Values.global.clusterName }} \
+      --container-runtime containerd \
+      --kubelet-extra-args '--max-pods=110'
+
+    --BOUNDARY--
+{{- end }} 

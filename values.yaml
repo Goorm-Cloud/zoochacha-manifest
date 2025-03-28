@@ -60,7 +60,18 @@ service:
 ingress:
   enabled: false
 
-resources: {}
+resources:
+  nginx:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  admin:
+    requests:
+      cpu: 200m
+      memory: 256Mi
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -112,6 +123,7 @@ affinity: {}
 # Global Values
 global:
   environment: production
+  clusterName: zoochacha-eks-cluster
   domain: zoochacha.com
   adminDomain: www.zoochacha.com/admin
   # Namespace 설정
@@ -120,10 +132,21 @@ global:
     argocd: argocd
     nginx: zoochacha
     db: zoochacha-db
-  # 인스톨러 관련 설정
-  installer:
-    namespace: zoochacha
-    serviceAccountName: zoochacha-installer
+
+# Namespaces Configuration
+namespaces:
+  - name: zoochacha
+    labels:
+      app.kubernetes.io/part-of: zoochacha
+  - name: zoochacha-db
+    labels:
+      app.kubernetes.io/part-of: zoochacha
+  - name: cert-manager
+    labels:
+      app.kubernetes.io/part-of: zoochacha
+  - name: argocd
+    labels:
+      app.kubernetes.io/part-of: zoochacha
 
 # AWS 설정
 aws:
@@ -132,23 +155,86 @@ aws:
   # accessKeyID, secretAccessKey, roleArn
 
 # Cert-Manager Configuration
-cert-manager:
-  enabled: true
-  installCRDs: true
+certmanager:
+  enabled: false
+  installCRDs: false
+  webhook:
+    timeoutSeconds: 30
+  namespace: cert-manager
   
   # DNS 챌린지를 위한 솔버 설정
   solver:
     dns01:
       route53:
-        region: us-east-1
+        region: ap-northeast-2
+        accessKeyID: ""
+        secretAccessKey: ""
+        hostedZoneID: ""
 
 # Nginx Ingress Configuration
 nginx-ingress:
   enabled: false
 
+# Nginx Proxy Configuration
+nginxProxy:
+  replicaCount: 1
+  image:
+    repository: nginx
+    tag: "1.25.3"
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    port: 80
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  configMap:
+    data:
+      nginx.conf: |
+        worker_processes auto;
+        events {
+          worker_connections 1024;
+        }
+        http {
+          upstream map_backend {
+            server map-server.zoochacha.svc.cluster.local:8002;
+          }
+          upstream admin_backend {
+            server admin-server.zoochacha.svc.cluster.local:8001;
+          }
+          server {
+            listen 80;
+            server_name _;
+            
+            location / {
+              proxy_pass http://map_backend;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            location /admin {
+              proxy_pass http://admin_backend;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+          }
+        }
+
 # Nginx Configuration
 nginx:
   enabled: true
+  image:
+    repository: nginx
+    tag: "1.25.3"
+    pullPolicy: IfNotPresent
   service:
     type: LoadBalancer
   serverBlock: |-
@@ -315,39 +401,13 @@ database:
 
 # ArgoCD Configuration
 argocd:
-  enabled: true
-  # 기존 리포지토리 시크릿이 있으면 새로 생성하지 않음
-  skipRepositorySecrets: true
-  server:
-    extraArgs:
-      - --insecure
-  # Argo CD 웹 인터페이스 접근을 위한 Ingress 설정
-  ingress:
-    enabled: false
-  
-  # ArgoCD 애플리케이션 관리
+  enabled: false
   application:
-    enabled: true
-    # 자동 동기화 설정
-    syncPolicy:
-      automated:
-        prune: true
-        selfHeal: true
-    # 애플리케이션 소스 저장소 설정 - 실제 값은 templates/argo/application.yaml에서 사용
+    enabled: false
     source:
-      targetRevision: HEAD
-    # 대상 Kubernetes 클러스터 설정
+      targetRevision: main
     destination:
       server: https://kubernetes.default.svc
-      namespace: zoochacha
-  
-  # 사용자 정의 리소스 정의(CRD) 설치 여부
-  crds:
-    install: false
-  
-  # Redis 설정
-  redis:
-    enabled: true
 
 # TLS Configuration
 tls:
@@ -358,33 +418,26 @@ tls:
 
 # ArgoCD Chart 설정 (서브차트)
 argo-cd:
+  enabled: true
   global:
     domain: argocd.zoochacha.com
-  installCRDs: false
+  installCRDs: true
+  namespace: argocd
   server:
+    extraArgs:
+      - --insecure
     ingress:
-      enabled: false
+      enabled: false  # 우리가 직접 Ingress를 관리할 것이므로 비활성화
+    service:
+      type: ClusterIP  # Ingress를 통해 접근할 것이므로 ClusterIP로 변경
   controller:
-    namespace: argocd
+    enableStatefulSet: true
   dex:
     enabled: false
   notifications:
     enabled: true
   applicationSet:
     enabled: true
-
-# 네임스페이스 설정
-namespaces:
-  - name: cert-manager
-    create: true
-  - name: ingress-nginx
-    create: false
-  - name: zoochacha
-    create: true
-  - name: zoochacha-db
-    create: true
-  - name: argocd
-    create: false
 
 # 민감정보 - Git에 포함되지 않는 파일
 secrets:
@@ -407,3 +460,126 @@ secrets:
         url: https://github.com/Goorm-Cloud/manifast-reservation.git
       - name: reservation-detail-service
         url: https://github.com/Goorm-Cloud/manifast-rds.git
+
+# HPA 설정
+hpa:
+  admin:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  map:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 15
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  reservation:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  rds:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# 각 서비스의 리소스 설정
+resources:
+  admin:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  map:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 700m
+      memory: 1Gi
+  reservation:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 700m
+      memory: 1Gi
+  rds:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Karpenter Configuration
+karpenter:
+  enabled: false
+  installCRDs: false
+  webhook:
+    timeoutSeconds: 30
+  serviceAccount:
+    roleArn: "arn:aws:iam::651706756261:role/KarpenterControllerRole-zoochacha"
+
+# RBAC Configuration
+rbac:
+  create: true
+  serviceAccountName: zoochacha-installer
+  namespace: zoochacha
+  rules:
+    - apiGroups: [""]
+      resources: ["secrets", "configmaps", "services"]
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    - apiGroups: ["apps"]
+      resources: ["deployments", "statefulsets"]
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    - apiGroups: ["batch"]
+      resources: ["jobs"]
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Hooks Configuration
+hooks:
+  enabled: true
+  preInstall:
+    enabled: true
+    weight: -100  # 가장 먼저 실행
+    jobs:
+      - name: create-namespaces
+        weight: -100
+      - name: install-cert-manager-crds
+        weight: -90
+      - name: install-argocd-crds
+        weight: -80
+      - name: install-karpenter-crds
+        weight: -70
+  postInstall:
+    enabled: true
+    weight: 100
+    jobs:
+      - name: wait-for-cert-manager
+        weight: 10
+      - name: wait-for-argocd
+        weight: 20
+      - name: wait-for-karpenter
+        weight: 30
+
+# ArgoCD Configuration
+argo:
+  enabled: true
+  namespace: argocd
+  domain: argo.zoochacha.online
+  server:
+    service:
+      type: ClusterIP
+
+# Karpenter Configuration
+karpenter:
+  enabled: false
+  namespace: karpenter

@@ -1,0 +1,181 @@
+{{- if .Values.hooks.preInstall.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: install-crds
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-150"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      serviceAccountName: {{ .Values.rbac.serviceAccountName }}
+      containers:
+      - name: install-crds
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          # cert-manager CRD
+          {{- if .Values.certmanager.enabled }}
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.3/cert-manager.crds.yaml
+          {{- end }}
+          
+          # ArgoCD CRD
+          {{- if .Values.argo.enabled }}
+          kubectl apply -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/crds/application-crd.yaml
+          kubectl apply -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/crds/applicationset-crd.yaml
+          {{- end }}
+          
+          # Karpenter CRD
+          {{- if .Values.karpenter.enabled }}
+          kubectl apply -f https://raw.githubusercontent.com/aws/karpenter/main/pkg/apis/crds/karpenter.sh_provisioners.yaml
+          kubectl apply -f https://raw.githubusercontent.com/aws/karpenter/main/pkg/apis/crds/karpenter.k8s.aws_awsnodetemplates.yaml
+          {{- end }}
+      restartPolicy: Never
+  backoffLimit: 3
+{{- end }}
+
+{{- if .Values.certmanager.enabled }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clusterissuers.cert-manager.io
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-140"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  group: cert-manager.io
+  names:
+    kind: ClusterIssuer
+    listKind: ClusterIssuerList
+    plural: clusterissuers
+    singular: clusterissuer
+  scope: Cluster
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+{{- end }}
+
+{{- if .Values.argo.enabled }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: applications.argoproj.io
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  group: argoproj.io
+  names:
+    kind: Application
+    listKind: ApplicationList
+    plural: applications
+    singular: application
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                source:
+                  type: object
+                  properties:
+                    repoURL:
+                      type: string
+                    targetRevision:
+                      type: string
+                    path:
+                      type: string
+                destination:
+                  type: object
+                  properties:
+                    server:
+                      type: string
+                    namespace:
+                      type: string
+                project:
+                  type: string
+                syncPolicy:
+                  type: object
+                  properties:
+                    automated:
+                      type: object
+                      properties:
+                        prune:
+                          type: boolean
+                        selfHeal:
+                          type: boolean
+{{- end }}
+
+{{- if .Values.karpenter.enabled }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: provisioners.karpenter.sh
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "2"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  group: karpenter.sh
+  names:
+    kind: Provisioner
+    listKind: ProvisionerList
+    plural: provisioners
+    singular: provisioner
+  scope: Cluster
+  versions:
+    - name: v1alpha5
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                requirements:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                      operator:
+                        type: string
+                      values:
+                        type: array
+                        items:
+                          type: string
+                limits:
+                  type: object
+                  properties:
+                    resources:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+{{- end }} 
